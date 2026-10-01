@@ -1,0 +1,42 @@
+# Lab 18.4 pattern: a person triggers it, a model drafts, a person reviews the artifact.
+name: Draft runbook
+
+on:
+  workflow_dispatch:
+    inputs:
+      incident:
+        description: "Short description of the incident to draft a runbook for"
+        required: true
+
+permissions:
+  contents: read
+  models: read
+
+jobs:
+  draft:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Draft runbook
+        id: ai
+        uses: actions/ai-inference@v1
+        with:
+          prompt: |
+            You are an SRE writing a first-draft runbook for the checkout-api service
+            (a containerized Python service on k3s, health endpoint /health on port 8000,
+            exposed on NodePort 30080, monitored by Prometheus and Alertmanager).
+            Incident: ${{ inputs.incident }}
+            Produce: symptoms, likely causes, diagnostic commands, remediation steps,
+            and escalation criteria. Mark anything uncertain as NEEDS HUMAN REVIEW.
+
+      - name: Save draft
+        env:
+          DRAFT: ${{ steps.ai.outputs.response }}
+        run: printf '%s\n' "$DRAFT" > runbook-draft.md
+
+      - name: Upload draft for human review
+        uses: actions/upload-artifact@v4
+        with:
+          name: runbook-draft
+          path: runbook-draft.md
