@@ -1,0 +1,33 @@
+# Lab 18.1 pipeline: build, then test, on every push to main.
+name: checkout-api CI
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest   # switch to "self-hosted" once your team VM's runner is registered
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build
+        run: docker build -t checkout-api:${{ github.sha }} .
+
+      - name: Test
+        run: |
+          docker run -d --name checkout-api -p 8000:8000 checkout-api:${{ github.sha }}
+          for i in $(seq 1 15); do
+            curl -sf http://localhost:8000/health > health.json && break
+            sleep 2
+          done
+          cat health.json
+          grep -q '"status": "ok"' health.json
+
+      - name: Clean up
+        if: always()
+        run: docker rm -f checkout-api || true
